@@ -21,9 +21,6 @@ def yolov4(input_img):
 
     for _ in range(4):
         net = module.yolo_block(net, 512)
-        net = module.yolo_block(net, 512)
-        net = module.yolo_block(net, 512)
-        net = module.yolo_block(net, 512)
 
     net = module.yolo_block(net, 512)
     net = module.conv(net, 512, 1, 1)
