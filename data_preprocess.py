@@ -7,7 +7,11 @@ import config
 def get_bboxes(classes, xmin_list, xmax_list, ymin_list, ymax_list):
     output = []
     for c, xmin, xmax, ymin, ymax in zip(classes, xmin_list, xmax_list, ymin_list, ymax_list):
-        output.extend([c, xmin, xmax, ymin, ymax])
+        x = str((int(xmin) + int(xmax)) / 2) 
+        y = str((int(ymin) + int(ymax)) / 2)
+        w = str(int(xmax) - int(xmin))
+        h = str(int(ymax) - int(ymin))
+        output.extend([c, x, y, w, h])
 
     return output
 
