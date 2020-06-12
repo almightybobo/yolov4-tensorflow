@@ -28,7 +28,9 @@ def _get_label(data):
         center_y = int((ymin + ymax) // 2)
         if i >= config.anchor_num:
             break
-        label_1[center_y, center_x, i, :] = [1, ymin, ymax, xmin, xmax] + classes
+        box_w = xmax - xmin
+        box_h = ymax - ymin
+        label_1[center_y, center_x, i, :] = [1, center_x, center_y, box_w, box_h] + classes
 
     return label_1
 
@@ -61,10 +63,12 @@ def label_test(image, label):
             for anchor_i in range(len(label[0][0])):
                 if label[grid_h][grid_w][anchor_i][0] == 0:
                     continue
-                ymin = int(label[grid_h][grid_w][anchor_i][1] * config.stride_h)
-                ymax = int(label[grid_h][grid_w][anchor_i][2] * config.stride_h)
-                xmin = int(label[grid_h][grid_w][anchor_i][3] * config.stride_w)
-                xmax = int(label[grid_h][grid_w][anchor_i][4] * config.stride_w)
+                x = int(label[grid_h][grid_w][anchor_i][1] * config.stride_h)
+                y = int(label[grid_h][grid_w][anchor_i][2] * config.stride_h)
+                w = int(label[grid_h][grid_w][anchor_i][3] * config.stride_w)
+                h = int(label[grid_h][grid_w][anchor_i][4] * config.stride_w)
+                xmin, xmax = int(x - 1/2 * w), int(x + 1/2 * w)
+                ymin, ymax = int(y - 1/2 * h), int(y + 1/2 * h)
                 classes = label[grid_h][grid_w][anchor_i][5:]
                 class_i = list(classes).index(1)
                 cv2.putText(image, str(config.index2class[class_i+1]), (xmin, ymin-10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255))
