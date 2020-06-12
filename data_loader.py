@@ -8,6 +8,7 @@ def data_aug():
     pass
 
 def _get_label(data):
+    # TODO: 3 labels, only one now
     data = data.astype(np.float)
     label_width, label_height = config.width // config.stride_w, config.height // config.stride_h
     label_1 = np.zeros(
