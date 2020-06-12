@@ -4,13 +4,13 @@ import re
 import glob
 import config
 
-def get_bboxes(classes, xmin_list, xmax_list, ymin_list, ymax_list):
+def get_bboxes(img_width, img_height, classes, xmin_list, xmax_list, ymin_list, ymax_list):
     output = []
     for c, xmin, xmax, ymin, ymax in zip(classes, xmin_list, xmax_list, ymin_list, ymax_list):
-        x = str((int(xmin) + int(xmax)) / 2) 
-        y = str((int(ymin) + int(ymax)) / 2)
-        w = str(int(xmax) - int(xmin))
-        h = str(int(ymax) - int(ymin))
+        x = str((int(xmin) + int(xmax)) / 2 / int(img_width)) 
+        y = str((int(ymin) + int(ymax)) / 2 / int(img_height))
+        w = str(int(xmax) - int(xmin) / int(img_width))
+        h = str(int(ymax) - int(ymin) / int(img_height))
         output.extend([c, x, y, w, h])
 
     return output
@@ -30,16 +30,16 @@ def xml2info(xml_path, img_dir):
         return 
     img_name = re.findall(r'<filename>(.*?)</filename>', data)
     img_path = os.path.join(img_dir, img_name[0])
-    img_width = re.findall(r'<width>(.*?)</width>', data)
-    img_height = re.findall(r'<height>(.*?)</height>', data)
+    img_width = re.findall(r'<width>(.*?)</width>', data)[0]
+    img_height = re.findall(r'<height>(.*?)</height>', data)[0]
     classes = re.findall(r'<name>(.*?)</name>', data)[1:]
     classes = get_voc_classidx(classes)
     xmin_list = re.findall(r'<xmin>(.*?)</xmin>', data)
     xmax_list = re.findall(r'<xmax>(.*?)</xmax>', data)
     ymin_list = re.findall(r'<ymin>(.*?)</ymin>', data)
     ymax_list = re.findall(r'<ymax>(.*?)</ymax>', data)
-    bboxes = get_bboxes(classes, xmin_list, xmax_list, ymin_list, ymax_list)
-    ret = [img_path] + img_width + img_height + bboxes
+    bboxes = get_bboxes(img_width, img_height, classes, xmin_list, xmax_list, ymin_list, ymax_list)
+    ret = [img_path, img_width, img_height] + bboxes
 
     return ret
 
