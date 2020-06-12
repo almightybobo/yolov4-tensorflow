@@ -1,7 +1,7 @@
 width = 608
 height = 608
 class_num = 20
-anchor_num = 9
+anchor_num = 3
 stride_w = 32
 stride_h = 32
 class_map = {
