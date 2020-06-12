@@ -2,8 +2,10 @@ width = 608
 height = 608
 class_num = 20
 anchor_num = 3
-stride_w = 32
-stride_h = 32
+anchors = [(10, 13), (16, 30), (33, 23), (30, 61), (62, 45), (59, 119), (116, 90), (156, 198), (373, 326)]
+stride1 = 32
+stride2 = 16 
+stride3 = 8
 class_map = {
         'aeroplane': '1', 'bicycle': '2', 'bird': '3', 'boat': '4', 'bottle': '5', 
         'bus': '6', 'car': '7', 'cat': '8', 'chair': '9', 'cow': '10', 'diningtable': '11', 

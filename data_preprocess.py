@@ -9,8 +9,8 @@ def get_bboxes(img_width, img_height, classes, xmin_list, xmax_list, ymin_list, 
     for c, xmin, xmax, ymin, ymax in zip(classes, xmin_list, xmax_list, ymin_list, ymax_list):
         x = str((int(xmin) + int(xmax)) / 2 / int(img_width)) 
         y = str((int(ymin) + int(ymax)) / 2 / int(img_height))
-        w = str(int(xmax) - int(xmin) / int(img_width))
-        h = str(int(ymax) - int(ymin) / int(img_height))
+        w = str((int(xmax) - int(xmin)) / int(img_width))
+        h = str((int(ymax) - int(ymin)) / int(img_height))
         output.extend([c, x, y, w, h])
 
     return output
