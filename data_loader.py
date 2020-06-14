@@ -43,7 +43,7 @@ def _get_label(data):
 
     data = data[2:].reshape(-1, 5)
 
-    for i, (c, cx, cy, box_w, box_h) in enumerate(data):
+    for c, cx, cy, box_w, box_h in data:
         best_i = _get_best_index(config.anchors, [box_w, box_h])
 
         x = int(cx * config.width // stride_sizes[best_i // 3])
@@ -78,7 +78,6 @@ def load_data(filename, n_repeat=10, buffer_size=50, batch_size=3):
 
     return dataset
 
-# TODO: need to edit
 def label_test(image, l1, l2, l3):
     labels = [l1, l2, l3]
     for i, label in enumerate(labels):
