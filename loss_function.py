@@ -29,10 +29,10 @@ def _get_iou(xy, wh, label):
     return iou
 
 def _get_low_iou_mask(xy, wh, label, ignore_thresh):
-    true_conf = label[..., 4]
+    true_conf = label[..., 4:5]
 
     low_iou_mask = tf.TensorArray(tf.bool, size=0, dynamic_size=True)
-    batch_size = label.shape[0]
+    batch_size = tf.shape(label)[0]
     
     def loop_cond(index, low_iou_mask):
         return tf.less(index, batch_size)        
@@ -43,8 +43,8 @@ def _get_low_iou_mask(xy, wh, label, ignore_thresh):
 
         iou = _get_iou(xy[index], wh[index], label_valid)
 
-        best_giou = tf.reduce_max(iou, axis=-1)
-        low_iou_mask_tmp = best_giou < ignore_thresh
+        best_iou = tf.reduce_max(iou, axis=-1)
+        low_iou_mask_tmp = best_iou < ignore_thresh
         low_iou_mask_tmp = tf.expand_dims(low_iou_mask_tmp, -1)
         low_iou_mask = low_iou_mask.write(index, low_iou_mask_tmp)
         return index+1, low_iou_mask
@@ -79,15 +79,15 @@ def _get_ciou_loss(pred_xy, pred_wh, label):
     max_right_bottom = tf.maximum(true_right_bottom, pred_right_bottom)
 
     intersection_wh = tf.maximum(min_right_bottom - max_left_top, 0.0)
-    intersection_area = intersection_wh[..., 0] * intersection_wh[..., 1]
+    intersection_area = intersection_wh[..., 0:1] * intersection_wh[..., 1:2]
 
     combine_wh = tf.maximum(max_right_bottom - min_left_top, 0.0)
 
-    combine_diagnal = tf.square(combine_wh[..., 0]) + tf.square(combine_wh[..., 1])
-    two_center_distance = tf.square(true_xy[..., 0] - pred_xy[..., 0]) + tf.square(true_xy[..., 1] - pred_xy[..., 1])
+    combine_diagnal = tf.square(combine_wh[..., 0:1]) + tf.square(combine_wh[..., 1:2])
+    two_center_distance = tf.square(true_xy[..., 0:1] - pred_xy[..., 0:1]) + tf.square(true_xy[..., 1:2] - pred_xy[..., 1:2])
 
-    pred_area = pred_wh[..., 0] * pred_wh[..., 1]
-    true_area = true_wh[..., 0] * true_wh[..., 1]
+    pred_area = pred_wh[..., 0:1] * pred_wh[..., 1:2]
+    true_area = true_wh[..., 0:1] * true_wh[..., 1:2]
 
     iou = intersection_area / (pred_area + true_area - intersection_area)
 
@@ -95,8 +95,8 @@ def _get_ciou_loss(pred_xy, pred_wh, label):
 
     v = 4 / (pi * pi) * tf.square( 
             tf.subtract(
-                tf.math.atan(true_wh[..., 0] / true_wh[..., 1]),
-                tf.math.atan(pred_wh[..., 0] / pred_wh[..., 1])))
+                tf.math.atan(true_wh[..., 0:1] / true_wh[..., 1:2]),
+                tf.math.atan(pred_wh[..., 0:1] / pred_wh[..., 1:2])))
 
     alpha = v / (1.0 - iou + v)
     ciou_loss = 1.0 - iou + two_center_distance / combine_diagnal +  alpha * v
@@ -104,22 +104,22 @@ def _get_ciou_loss(pred_xy, pred_wh, label):
 
 
 def _get_yolov4_loss(xy, wh, conf, prob, label):
-    batch_size = xy.shape[0]
+    batch_size = tf.cast(tf.shape(xy)[0], tf.float32)
 
-    area = wh[..., 0] * wh[..., 1]
+    area = wh[..., 0:1] * wh[..., 1:2]
     area = tf.where(tf.math.greater(area, 0),
             area, tf.math.square(area))
 
     low_iou_prob_mask = _get_low_iou_prob_mask(
             xy, wh, prob, label, config.ignore_thresh, config.prob_thresh)
-    no_obj_mask = 1.0 - label[..., 4]
+    no_obj_mask = 1.0 - label[..., 4:5]
     no_obj_conf_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=label[:,:,:,:,4], 
+            labels=label[:,:,:,:,4:5], 
             logits=conf) * area * no_obj_mask * low_iou_prob_mask
 
-    obj_mask = label[..., 4]        
+    obj_mask = label[..., 4:5]        
     obj_conf_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=label[:,:,:,:,4], 
+            labels=label[:,:,:,:,4:5], 
             logits=conf) * obj_mask        
     
     conf_loss = no_obj_conf_loss + obj_conf_loss
@@ -188,7 +188,7 @@ def _get_yolov4_loss(xy, wh, conf, prob, label):
     return loss_total
 
 def _decode_predict(predict, anchors):
-    shape = predict.shape
+    shape = tf.cast(tf.shape(predict), tf.float32)
     predict = tf.reshape(
             predict, 
             [shape[0], shape[1], shape[2], config.anchor_num, 5+config.class_num])
