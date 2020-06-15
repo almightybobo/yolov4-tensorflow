@@ -19,3 +19,20 @@ ignore_thresh = 0.5
 prob_thresh = 0.25
 score_thresh = 0.25
 iou_normalizer = 0.07
+
+# For training
+train_path = './data/train.txt'
+test_path = './data/test.txt'
+model_dir = './model'
+model_path = './model/yolov4.ckpt'
+
+batch_norm_params = {
+        'decay': 0.9,
+        'epsilon': 1e-05,
+        'scale': True,
+        'fused': None} 
+
+weight_decay = 0.0005
+batch_size = 1
+epochs = 100
+max_stagnation = 10

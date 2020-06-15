@@ -213,6 +213,7 @@ def yolov4_loss(predict_list, label_list):
     total_loss = 0
     anchors = [config.anchors[0::3], config.anchors[1::3], config.anchors[2::3]]
     for i, (predict, label) in enumerate(zip(predict_list, label_list)):
+        print(predict, label)
         xy, wh, conf, prob = _decode_predict(predict, anchors[i])
         total_loss += _get_yolov4_loss(xy, wh, conf, prob, label)
 

@@ -67,11 +67,16 @@ def _parse_data(line):
     return image, label1, label2, label3
 
 
-def load_data(filename, n_repeat=10, buffer_size=50, batch_size=3):
+def load_data(filename, n_repeat=10, buffer_size=50, batch_size=3, train=True):
     dataset = tf.data.TextLineDataset([filename])
+    if train:
+        dataset = dataset.take(4000)
+    else:
+        dataset = dataset.skip(4000)
     dataset = dataset.repeat(n_repeat)
     dataset = dataset.shuffle(buffer_size)
     dataset = dataset.map(_parse_data)
+
 
     dataset = dataset.batch(batch_size)
     dataset = dataset.make_one_shot_iterator().get_next()
@@ -103,9 +108,10 @@ def label_test(image, l1, l2, l3):
 
 if __name__ == '__main__':
     dataset = load_data('./data/train.txt')
+    images, label1, label2, label3 = dataset
     
     with tf.Session() as sess:
-        images, label1, label2, label3 = sess.run(dataset)
+        images, label1, label2, label3 = sess.run([images, label1, label2, label3])
 
     for i, (image, l1, l2, l3) in enumerate(zip(images, label1, label2, label3)):
         image = label_test(image, l1, l2, l3)
