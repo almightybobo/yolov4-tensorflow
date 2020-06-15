@@ -3,19 +3,6 @@ import tensorflow as tf
 import numpy as np
 import config
 
-'''
-def _ciou_loss(predict, label):
-    true_ymin, true_ymax = label[..., 1], label[..., 2]
-    true_xmin, true_xmax = label[..., 3], label[..., 4]
-    pred_ymin, pred_ymax = predict[..., 1], predict[..., 2]
-    pred_xmin, pred_xmax = predict[..., 3], predict[..., 3]
-
-    true_left_top = true_xy - true_wh / 2
-    true_right_bottom = true_xy + true_wh / 2
-    pred_left_top = pred_xy - true_wh / 2
-    pred_right_bottom = pred_xy + true_wh / 2
-'''
-
 def _get_iou(xy, wh, label):
     pred_xy = tf.expand_dims(xy, -2)
     pred_wh = tf.expand_dims(wh, -2)
@@ -77,51 +64,92 @@ def _get_low_iou_prob_mask(xy, wh, prob, label, ignore_thresh, prob_thresh):
     low_iou_prob_mask = tf.cast(tf.math.logical_or(low_iou_mask, low_prob_mask), tf.float32)
     return low_iou_prob_mask
 
-def _get_ciou_loss():
-    pass
+def _get_ciou_loss(pred_xy, pred_wh, label):
+    true_xy = label[..., 0:2]
+    true_wh = label[..., 2:4]
 
-def _get_yolov4_loss(pred_xy, pred_wh, pred_conf, pred_prob, label):
-    batch_size = pred_xy.shape[0]
+    true_left_top = true_xy - true_wh / 2
+    true_right_bottom = true_xy + true_wh / 2
+    pred_left_top = pred_xy - true_wh / 2
+    pred_right_bottom = pred_xy + pred_wh / 2
 
-    area = pred_wh[..., 0] * pred_wh[..., 1]
+    min_left_top = tf.minimum(true_left_top, pred_left_top)
+    max_left_top = tf.maximum(true_left_top, pred_left_top)
+    min_right_bottom = tf.minimum(true_right_bottom, pred_right_bottom)
+    max_right_bottom = tf.maximum(true_right_bottom, pred_right_bottom)
+
+    intersection_wh = tf.maximum(min_right_bottom - max_left_top, 0.0)
+    intersection_area = intersection_wh[..., 0] * intersection_wh[..., 1]
+
+    combine_wh = tf.maximum(max_right_bottom - min_left_top, 0.0)
+
+    combine_diagnal = tf.square(combine_wh[..., 0]) + tf.square(combine_wh[..., 1])
+    two_center_distance = tf.square(true_xy[..., 0] - pred_xy[..., 0]) + tf.square(true_xy[..., 1] - pred_xy[..., 1])
+
+    pred_area = pred_wh[..., 0] * pred_wh[..., 1]
+    true_area = true_wh[..., 0] * true_wh[..., 1]
+
+    iou = intersection_area / (pred_area + true_area - intersection_area)
+
+    pi = 3.1415926
+
+    v = 4 / (pi * pi) * tf.square( 
+            tf.subtract(
+                tf.math.atan(true_wh[..., 0] / true_wh[..., 1]),
+                tf.math.atan(pred_wh[..., 0] / pred_wh[..., 1])))
+
+    alpha = v / (1.0 - iou + v)
+    ciou_loss = 1.0 - iou + two_center_distance / combine_diagnal +  alpha * v
+    return ciou_loss
+
+
+def _get_yolov4_loss(xy, wh, conf, prob, label):
+    batch_size = xy.shape[0]
+
+    area = wh[..., 0] * wh[..., 1]
     area = tf.where(tf.math.greater(area, 0),
             area, tf.math.square(area))
 
     low_iou_prob_mask = _get_low_iou_prob_mask(
-            pred_xy, pred_wh, pred_prob, label, config.ignore_thresh, config.prob_thresh)
+            xy, wh, prob, label, config.ignore_thresh, config.prob_thresh)
     no_obj_mask = 1.0 - label[..., 4]
     no_obj_conf_loss = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=label[:,:,:,:,4], 
-            logits=pred_conf) * area * no_obj_mask * low_iou_prob_mask
+            logits=conf) * area * no_obj_mask * low_iou_prob_mask
 
     obj_mask = label[..., 4]        
     obj_conf_loss = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=label[:,:,:,:,4], 
-            logits=pred_conf) * obj_mask        
+            logits=conf) * obj_mask        
     
     conf_loss = no_obj_conf_loss + obj_conf_loss
     conf_loss = tf.clip_by_value(conf_loss, 0.0, 1e3)
     conf_loss = tf.reduce_sum(conf_loss) / batch_size
 
-    '''
-    # ciou_loss
-    yi_true_ciou = tf.where(tf.math.less(yi_true[..., 0:4], 1e-10),
-                                            tf.ones_like(yi_true[..., 0:4]), yi_true[..., 0:4])
-    pre_xy = tf.where(tf.math.less(xy, 1e-10),
-                                            tf.ones_like(xy), xy)
-    pre_wh = tf.where(tf.math.less(wh, 1e-10),
-                                            tf.ones_like(wh), wh)
-    ciou_loss = self.__my_CIOU_loss(pre_xy, pre_wh, yi_true_ciou)
+    true_ciou = tf.where(
+            tf.math.less(label[..., 0:4], 1e-10),
+            tf.ones_like(label[..., 0:4]), 
+            label[..., 0:4])
+    pred_xy = tf.where(
+            tf.math.less(xy, 1e-10),
+            tf.ones_like(xy), 
+            xy)
+    pred_wh = tf.where(
+            tf.math.less(wh, 1e-10),
+            tf.ones_like(wh), 
+            wh)
+
+    ciou_loss = _get_ciou_loss(pred_xy, pred_wh, true_ciou)
     ciou_loss = tf.where(tf.math.greater(obj_mask, 0.5), ciou_loss, tf.zeros_like(ciou_loss))
-    ciou_loss = tf.square(ciou_loss * obj_mask) * iou_normalizer
+    ciou_loss = tf.square(ciou_loss * obj_mask) * config.iou_normalizer
     ciou_loss = tf.clip_by_value(ciou_loss, 0, 1e3)
-    ciou_loss = tf.reduce_sum(ciou_loss) / N
+    ciou_loss = tf.reduce_sum(ciou_loss) / batch_size
     ciou_loss = tf.clip_by_value(ciou_loss, 0, 1e4)
     conf_loss = no_obj_conf_loss + obj_conf_loss
     conf_loss = tf.clip_by_value(conf_loss, 0.0, 1e3)
     conf_loss = tf.reduce_sum(conf_loss) / batch_size
-    '''
-    xy_loss = obj_mask * tf.square(label[..., 0:2] - pred_xy) 
+
+    xy_loss = obj_mask * tf.square(label[..., 0:2] - xy) 
     xy_loss = tf.reduce_sum(xy_loss) / batch_size
     xy_loss = tf.clip_by_value(xy_loss, 0.0, 1e4)
 
@@ -130,9 +158,9 @@ def _get_yolov4_loss(pred_xy, pred_wh, pred_conf, pred_prob, label):
             tf.ones_like(label[..., 2:4]), 
             label[..., 2:4])
     refine_pred_wh = tf.where(
-            tf.math.less(pred_wh, 1e-10),
-            tf.ones_like(pred_wh),
-            pred_wh)
+            tf.math.less(wh, 1e-10),
+            tf.ones_like(wh),
+            wh)
 
     refine_true_wh = tf.math.log(tf.clip_by_value(refine_true_wh, 1e-10, 1e10))
     refine_pred_wh = tf.math.log(tf.clip_by_value(refine_pred_wh, 1e-10, 1e10))
@@ -141,16 +169,16 @@ def _get_yolov4_loss(pred_xy, pred_wh, pred_conf, pred_prob, label):
     wh_loss = tf.reduce_sum(wh_loss) / batch_size
     wh_loss = tf.clip_by_value(wh_loss, 0.0, 1e4)
 
-    prob_score = pred_prob * pred_conf
+    prob_score = prob * conf
     high_score_mask = tf.cast(prob_score > config.score_thresh, tf.float32)
     
     no_obj_class_loss = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=label[..., 5:5+config.class_num],
-            logits=pred_prob) * low_iou_prob_mask * no_obj_mask * high_score_mask
+            logits=prob) * low_iou_prob_mask * no_obj_mask * high_score_mask
     
     obj_class_loss = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=label[..., 5:5+config.class_num],
-            logits=pred_prob) * obj_mask
+            logits=prob) * obj_mask
 
     class_loss = (no_obj_class_loss + obj_class_loss)
     class_loss = tf.reduce_sum(class_loss) / batch_size    
